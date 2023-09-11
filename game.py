@@ -1,3 +1,5 @@
+import os.path
+
 import pygame
 from assets import colors
 import copy
@@ -8,8 +10,9 @@ pygame.init()
 
 gridwidth = 11
 gridheight = 6
+size = 64
 
-scwidth, scheight = gridwidth * 64, gridheight * 64
+scwidth, scheight = gridwidth * size, gridheight * size
 screen = pygame.display.set_mode((scwidth, scheight), pygame.FULLSCREEN | pygame.SCALED | pygame.DOUBLEBUF)
 colselection = colors.BLACK
 screencolor = colors.BLACK
@@ -21,21 +24,22 @@ grid = pygame.Surface((scwidth, scheight), pygame.HWSURFACE | pygame.SRCALPHA)
 grid.fill((0, 0, 0, 0))
 for w in range(gridwidth):
     for h in range(gridheight):
-        pygame.draw.rect(grid, (*colors.WHITE, 128), (w * 64, h * 64, 64, 64), 2, border_radius=4)
+        pygame.draw.rect(grid, (*colors.WHITE, 128), (w * size, h * size, size, size), 2, border_radius=4)
 
 win = pygame.Surface((scwidth, scheight), pygame.SRCALPHA)
 
 framerate = 60
 clock = pygame.time.Clock()
 counter = 0
-turntime = 1
+turntime = 3
 turnmod = 0.99
-turnmin = 0.5
+turnmin = 0.1
 turns = 0
 suddendeath = False
 stuns = ('whiff', 'knocked', 'getup')
 
 bar = pygame.image.load("sprites/ui/bar.png").convert_alpha()
+arrow = pygame.image.load("sprites/ui/arrow.png").convert_alpha()
 lowest = 'p1'
 rotate = 0
 predictions = []
@@ -43,6 +47,7 @@ sdfont = pygame.font.Font(None, 80).render("SUDDEN DEATH", False, colors.RED)
 p1winfont = pygame.font.Font(None, 80).render("P1 WINS", False, colors.RED)
 p2winfont = pygame.font.Font(None, 80).render("P2 WINS", False, colors.RED)
 drawfont = pygame.font.Font(None, 80).render("DRAW", False, colors.BLUE)
+font = pygame.font.Font(None)
 
 
 class Player(pygame.sprite.Sprite):
@@ -263,6 +268,7 @@ class Player(pygame.sprite.Sprite):
                         effect[val] = wbind(effect[val]) if val == 0 else hbind(effect[val])
                 else:
                     determinestr(effect[val], True)
+
         determinestr.px = [s for s in players if s is not self][0]
 
         determinestr(self.move['effect'], True if self.move['move'] else False)
@@ -389,6 +395,7 @@ class Ruffian(Player):
             'signature': [0, 1, 0, 0, 1],
             'targetrecovery': 1,
             'dmg': 4,
+            'pierce': 1,
         },
         {
             'name': "strike_grab",
@@ -465,7 +472,7 @@ class Ruffian(Player):
         {
             'name': "super_ray",
             'move': False,
-            'effect': ([[x, y] for y in range(0, 2) for x in range(-1, 2) if x or y],
+            'effect': ([[x, y] for y in range(0, 2) for x in range(-1, 2)],
                        [[x, y] for y in range(0, 3) for x in range(-2, 3) if abs(x) > 1 or abs(y) > 1]),
             'signature': [0, 0, 0, 0, 1, 1],
             'dmg': 4,
@@ -880,7 +887,7 @@ class Roller(Player):
             'signature': [0, 0, 0, 0, 1],
             'dmg': 1,
             'knock': [1, 0],
-            'pierce': 1,
+            'pierce': 2,
             'priority': 3,
         },
         {
@@ -1293,7 +1300,7 @@ class GunGuy(Player):
             'move': True,
             'effect': [0, 0],
             'signature': [0, 0, 1, 0, 0, 1],
-            'special': 6,
+            'special': 8,
             'supercost': 6,
         },
         {
@@ -1446,6 +1453,7 @@ class Tussler(Player):
                     {
                         'pos': [-1, 0],
                         'name': "proj_pressure",
+                        'pierce': 1,
                     },
                 ],
                 'signature': True,
@@ -1575,10 +1583,10 @@ class Tussler(Player):
             'move': False,
             'effect': [[x, y] for y in range(gridheight) for x in range(gridwidth)],
             'signature': [0, 0, 0, 0, 1, 1],
-            'dmg': 1,
+            'dmg': 0,
             'knock': [-3],
             'recovery': 1,
-            'supercost': 1,
+            'supercost': 3,
             'priority': -1,
         },
     ]
@@ -1957,7 +1965,7 @@ def moveupdate():
             vec = pygame.math.Vector2(0, -1)
             for _ in range(8):
                 vec.rotate_ip(360 / 8)
-                particlesys.add([mover.x * 64 + 32, mover.y * 64 + 32], [vec.x, vec.y], 6, 0.1, 0, mover.team)
+                particlesys.add([mover.x * size + 32, mover.y * size + 32], [vec.x, vec.y], 6, 0.1, 0, mover.team)
 
         if mover.move.get('projectile', False):
             spawnlist: list[dict] = copy.deepcopy(mover.move['effect'])
@@ -2055,7 +2063,7 @@ def atkupdate():
                             knockback[0][0] += int(px.special) * math.copysign(1, knockback[0][0])
                             px.special = 0
                     elif knockback[0]:
-                        knockback[0] += px.special * math.copysign(1, knockback[0])
+                        knockback[0] += int(px.special) * math.copysign(1, knockback[0])
                         px.special = 0
             elif (kb := px.move.get('throw', False)) and pierced:
                 knockback = kb.copy()
@@ -2070,7 +2078,7 @@ def atkupdate():
                         knockback[0][0] += int(px.special) * math.copysign(1, knockback[0][0])
                         px.special = 0
                 elif knockback[0]:
-                    knockback[0] += px.special * math.copysign(1, knockback[0])
+                    knockback[0] += int(px.special) * math.copysign(1, knockback[0])
                     px.special = 0
 
             if knockback:
@@ -2200,7 +2208,7 @@ def redrawgamewindow(bottom='p1', full=False):
             [p1.move.get('offset', [0, 0])[0], p1.move.get('offset', [0, 0])[1]]
         if p1.facing == 'L':
             p1.sprite = pygame.transform.flip(p1.sprite, True, False)
-            p1.offset[0] = p1.sprite.get_width() / 64 - p1.offset[0] - 1
+            p1.offset[0] = p1.sprite.get_width() / size - p1.offset[0] - 1
         if p1.reverse:
             p1.sprite = pygame.transform.flip(p1.sprite, True, False)
         p1.shadow = teamcolor(p1.sprite, colors.BLACK, total=True, ip=False)
@@ -2209,7 +2217,7 @@ def redrawgamewindow(bottom='p1', full=False):
             [p2.move.get('offset', [0, 0])[0], p2.move.get('offset', [0, 0])[1]]
         if p2.facing == 'L':
             p2.sprite = pygame.transform.flip(p2.sprite, True, False)
-            p2.offset[0] = p2.sprite.get_width() / 64 - p2.offset[0] - 1
+            p2.offset[0] = p2.sprite.get_width() / size - p2.offset[0] - 1
         if p2.reverse:
             p2.sprite = pygame.transform.flip(p2.sprite, True, False)
         p2.shadow = teamcolor(p2.sprite, colors.BLACK, total=True, ip=False)
@@ -2222,16 +2230,17 @@ def redrawgamewindow(bottom='p1', full=False):
                 mod = 1 if p.facing == 'R' else -1
                 if p.actionqueue[0].get('projectile', False):
                     for pos in [s['pos'] for s in p.actionqueue[0]['effect']]:
-                        predictions.append([(*p.team, 64), ((p.x + pos[0] * mod) * 64,
-                                                            (p.y - pos[1] + p.air) * 64, 64, 64)])
+                        predictions.append([(*p.team, size), ((p.x + pos[0] * mod) * size,
+                                                              (p.y - pos[1] + p.air) * size, size, size)])
                     continue
                 if p.actionqueue[0]['move']:
                     coord = p.actionqueue[0]['effect']
-                    predictions.append([(*[(s + p.team[i]) * 2 / 5 for i, s in enumerate(colors.WHITE)], 64), (
-                        wbind(p.x + coord[0] * mod) * 64, hbind(p.y - coord[1] + p.air) * 64, 64, 64)])
+                    predictions.append([(*[(s + p.team[i]) * 2 / 5 for i, s in enumerate(colors.WHITE)], size), (
+                        wbind(p.x + coord[0] * mod) * size, hbind(p.y - coord[1] + p.air) * size, size, size)])
                 else:
                     for tile in p.actionqueue[0]['effect']:
-                        predictions.append([(*p.team, 64), ((p.x + tile[0] * mod) * 64, (p.y - tile[1]) * 64, 64, 64)])
+                        predictions.append([(*p.team, size), ((p.x + tile[0] * mod) * size,
+                                                              (p.y - tile[1]) * size, size, size)])
 
             if particle := p.move.get('particle', False):
                 for _ in range(particle[6]):
@@ -2253,14 +2262,14 @@ def redrawgamewindow(bottom='p1', full=False):
 
                         if i == 0 and isinstance(val, list):
                             mod = 1 if p.facing == 'R' else -1
-                            tempparticle[i][0] = p.x * 64 + 32 + tempparticle[i][0] * mod
-                            tempparticle[i][1] += p.y * 64 + 32
+                            tempparticle[i][0] = p.x * size + 32 + tempparticle[i][0] * mod
+                            tempparticle[i][1] += p.y * size + 32
                     particlesys.add(*tempparticle[:-1])
         for p in projectiles:
             coord = p.drive
             mod = 1 if p.facing == 'R' else -1
-            predictions.append([(*[(s + p.master.team[i]) * 2 / 5 for i, s in enumerate(colors.WHITE)], 64), (
-                (p.x + coord[0] * mod) * 64, (p.y - coord[1]) * 64, 64, 64)])
+            predictions.append([(*[(s + p.master.team[i]) * 2 / 5 for i, s in enumerate(colors.WHITE)], size), (
+                (p.x + coord[0] * mod) * size, (p.y - coord[1]) * size, size, size)])
 
     for pred in predictions:
         pygame.draw.rect(win, *pred, border_radius=4)
@@ -2269,12 +2278,12 @@ def redrawgamewindow(bottom='p1', full=False):
 
     lerp = min(1, counter / (turntime * framerate / 4))
 
-    p1pos = [(p1.last[0] * (1 - lerp) + p1.x * lerp) * 64 - p1.offset[0] * 64,
-             (p1.last[1] * (1 - lerp) + p1.y * lerp) * 64 - p1.offset[1] * 64]
-    p2pos = [(p2.last[0] * (1 - lerp) + p2.x * lerp) * 64 - p2.offset[0] * 64,
-             (p2.last[1] * (1 - lerp) + p2.y * lerp) * 64 - p2.offset[1] * 64]
-    projpos = {s.img: [(s.last[0] * (1 - lerp) + s.x * lerp) * 64,
-                       (s.last[1] * (1 - lerp) + s.y * lerp) * 64, s.facing] for s in projectiles}
+    p1pos = [(p1.last[0] * (1 - lerp) + p1.x * lerp) * size - p1.offset[0] * size,
+             (p1.last[1] * (1 - lerp) + p1.y * lerp) * size - p1.offset[1] * size]
+    p2pos = [(p2.last[0] * (1 - lerp) + p2.x * lerp) * size - p2.offset[0] * size,
+             (p2.last[1] * (1 - lerp) + p2.y * lerp) * size - p2.offset[1] * size]
+    projpos = {s.img: [(s.last[0] * (1 - lerp) + s.x * lerp) * size,
+                       (s.last[1] * (1 - lerp) + s.y * lerp) * size, s.facing] for s in projectiles}
 
     if lowest == 'p1':
         win.blit(p1.shadow, [s + 2 for s in p1pos])
@@ -2306,7 +2315,7 @@ def redrawgamewindow(bottom='p1', full=False):
         for i in range(p1.special):
             pygame.draw.circle(win, colors.DPURPLE, (15 + i * 16 + 10 + 1, 15 + i * 16 + 50), 10)
     elif type(p1) == Wrestler:
-        pygame.draw.rect(win, colors.DPURPLE, (30, 50 + 64 - 16 * p1.special, 22, 16 * p1.special))
+        pygame.draw.rect(win, colors.DPURPLE, (30, 50 + size - 16 * p1.special, 22, 16 * p1.special))
     elif type(p1) == Roller:
         for i in range(p1.special):
             pygame.draw.rect(win, colors.DPURPLE, (10 + 32 * bool(i - 3 >= 0), 50 + 22 * (i % 3), 32, 22))
@@ -2317,14 +2326,14 @@ def redrawgamewindow(bottom='p1', full=False):
             vec.rotate_ip(-45)
     elif type(p1) == Tussler:
         if p1.special:
-            pygame.draw.rect(win, colors.DPURPLE, (10, 50, 64, 64))
+            pygame.draw.rect(win, colors.DPURPLE, (10, 50, size, size))
     win.blit(p1.specui, (10, 50))
 
     if type(p2) == Ruffian:
         for i in range(p2.special):
             pygame.draw.circle(win, colors.DPURPLE, (scwidth - 15 - i * 16 - 10 - 1, 15 + i * 16 + 50), 10)
     elif type(p2) == Wrestler:
-        pygame.draw.rect(win, colors.DPURPLE, (scwidth - 53, 50 + 64 - 16 * p2.special, 22, 16 * p2.special))
+        pygame.draw.rect(win, colors.DPURPLE, (scwidth - 53, 50 + size - 16 * p2.special, 22, 16 * p2.special))
     elif type(p2) == Roller:
         for i in range(p2.special):
             pygame.draw.rect(win, colors.DPURPLE, (scwidth - 10 - 32 * (bool(i - 3 >= 0) + 1),
@@ -2336,7 +2345,7 @@ def redrawgamewindow(bottom='p1', full=False):
             vec.rotate_ip(45)
     elif type(p2) == Tussler:
         if p2.special:
-            pygame.draw.rect(win, colors.DPURPLE, (scwidth - 10 - 64, 50, 64, 64))
+            pygame.draw.rect(win, colors.DPURPLE, (scwidth - 10 - size, 50, size, size))
     win.blit(pygame.transform.flip(p2.specui, True, False), (scwidth - 10 - p2.specui.get_width(), 50))
 
     for i in range(p1.airmax):
@@ -2367,18 +2376,49 @@ def redrawgamewindow(bottom='p1', full=False):
     pygame.display.flip()
 
 
-win.blit(pygame.font.Font(None).render("Press space to start", False, colors.WHITE), (5, 5))
+win.blit(font.render("Press space to start", False, colors.WHITE), (5, 5))
 screen.blit(win, (0, 0))
 pygame.display.flip()
 notstarted = 4
 starttext = ["None", "Select p2", "Select p1", "Blacklist for p2", "Blacklist for p1",
              "p1 win", "p2 win", "draw", "BLACKLISTED"]
-starttext = [pygame.font.Font(None).render(s, False, colors.WHITE) for s in starttext]
+starttext = [font.render(s, False, colors.WHITE) for s in starttext]
 chars = [Ruffian, Wrestler, Roller, GunGuy, Tussler]
-charpics = [teamcolor(pygame.image.load(f"sprites/{s.__name__}/idle.png"), (255, 255, 255)) for s in chars]
-chartext = [pygame.font.Font(None).render(s.__name__, False, colors.WHITE) for s in chars]
+charpics = [[(teamcolor(pygame.image.load(f"sprites/{s.__name__}/{move['name']}.png"), (255, 255, 255))
+              if os.path.isfile(f"sprites/{s.__name__}/{move['name']}.png") else
+              teamcolor(pygame.image.load(f"sprites/{s.__name__}/{move['name'] + '1'}.png"), (255, 255, 255)))
+             for move in s.moves if isinstance(move['signature'], list)] for s in chars]
+chartext = [font.render(s.__name__, False, colors.WHITE) for s in chars]
+notableattrs = ['name', 'move', 'air', 'dmg', 'grab', 'knock', 'invincible', 'recovery', 'targetrecovery',
+                'aircost', 'free', 'hitcancel', 'whiffcancel', 'armor', 'pierce', 'super', 'special', 'supercost',
+                'specialcost', 'priority']
+charmoves = [[[font.render(f'{attr}: {move[attr]}', False, colors.WHITE) for
+               attr in notableattrs if attr in move] for move in s.moves if isinstance(move['signature'], list)]
+             for s in chars]
+charoffsets = [[move.get('offset', [0, 0]) for move in s.moves if isinstance(move['signature'], list)] for s in chars]
+sigdirs = {
+    0: arrow,
+    1: pygame.transform.rotate(arrow, 90),
+    2: pygame.transform.rotate(arrow, 180),
+    3: pygame.transform.rotate(arrow, 270),
+    4: pygame.image.load("sprites/ui/attack.png"),
+    5: pygame.image.load("sprites/ui/super.png"),
+}
+charsigs = []
+for s in chars:
+    charsiglist = []
+    for move in s.moves:
+        if isinstance(move['signature'], list):
+            sig = [sigdirs[index] for index, value in enumerate(move['signature']) if value]
+            sigsurf = pygame.Surface((len(sig) * 36, 32))
+            for inp in range(len(sig)):
+                sigsurf.blit(sig[inp], (inp * 36, 0))
+            charsiglist.append(sigsurf)
+    charsigs.append(charsiglist)
+
 blacklist = [None, None]
 cnt = 0
+cmdcnt = 0
 
 bind = bound(0)
 pbind = bind(10)
@@ -2405,17 +2445,33 @@ while run:
                 if notstarted in (4, 1):
                     if pygame.key.name(event.key) == 'up':
                         cnt -= 1
+                        cmdcnt = 0
                     elif pygame.key.name(event.key) == 'down':
                         cnt += 1
+                        cmdcnt = 0
+                    if pygame.key.name(event.key) == 'right':
+                        cmdcnt += 1
+                    elif pygame.key.name(event.key) == 'left':
+                        cmdcnt -= 1
                 else:
                     if pygame.key.name(event.key) == 'w':
                         cnt -= 1
+                        cmdcnt = 0
                     elif pygame.key.name(event.key) == 's':
                         cnt += 1
+                        cmdcnt = 0
+                    if pygame.key.name(event.key) == 'd':
+                        cmdcnt += 1
+                    elif pygame.key.name(event.key) == 'a':
+                        cmdcnt -= 1
                 if cnt < 0:
                     cnt += len(chars)
                 elif cnt >= len(chars):
                     cnt -= len(chars)
+                if cmdcnt < 0:
+                    cmdcnt += len(charmoves[cnt])
+                elif cmdcnt >= len(charmoves[cnt]):
+                    cmdcnt -= len(charmoves[cnt])
 
                 if pygame.key.name(event.key) == 'return':
                     if notstarted == 5:
@@ -2424,9 +2480,9 @@ while run:
                         p1.special, p2.special = p1.specstart, p2.specstart
 
                     if notstarted == 4:
-                        blacklist[1] = chars[cnt]
-                    elif notstarted == 3:
                         blacklist[0] = chars[cnt]
+                    elif notstarted == 3:
+                        blacklist[1] = chars[cnt]
                     elif notstarted == 2:
                         if chars[cnt] == blacklist[0]:
                             continue
@@ -2439,6 +2495,7 @@ while run:
                             p2 = chars[cnt](7, 5, colors.BLUE, ['up', 'left', 'down', 'right', '/', 'right shift'], 'L')
                     notstarted -= 1
                     cnt = 0
+                    cmdcnt = 0
                     if not notstarted:
                         p1.health, p2.health = 10, 10
                         p1.super, p2.super = 0, 0
@@ -2454,13 +2511,17 @@ while run:
                 win.blit((starttext[notstarted] if p1.health else starttext[notstarted + 1]), (5, 5))
         else:
             win.blit(starttext[notstarted], (5, 5))
-            win.blit(charpics[cnt], charpics[cnt].get_rect(center=(scwidth / 2, scheight / 2)))
-            if notstarted == 2 and chars[cnt] == blacklist[0]:
-                win.blit(starttext[-1], starttext[-1].get_rect(center=(scwidth / 2, scheight / 2 + 64)))
-            elif notstarted == 1 and chars[cnt] == blacklist[1]:
-                win.blit(starttext[-1], starttext[-1].get_rect(center=(scwidth / 2, scheight / 2 + 64)))
+            win.blit(charpics[cnt][0], charpics[cnt][0].get_rect(center=(scwidth / 2, scheight / 3)))
+            win.blit(charpics[cnt][cmdcnt], (scwidth * 1 / 6 - charoffsets[cnt][cmdcnt][0] * size,
+                                             scheight * 2 / 3 - charoffsets[cnt][cmdcnt][1] * size))
+            win.blit(charsigs[cnt][cmdcnt], charsigs[cnt][cmdcnt].get_rect(center=(scwidth * 1 / 2,
+                                                                                   scheight * 3 / 4)))
+            for offset, attr in enumerate(charmoves[cnt][cmdcnt]):
+                win.blit(attr, (scwidth * 2 / 3, scheight * 2 / 3 + offset * 14))
+            if (notstarted == 2 and chars[cnt] == blacklist[0]) or (notstarted == 1 and chars[cnt] == blacklist[1]):
+                win.blit(starttext[-1], starttext[-1].get_rect(center=(scwidth / 2, scheight / 3 + size)))
             else:
-                win.blit(chartext[cnt], chartext[cnt].get_rect(center=(scwidth / 2, scheight / 2 + 64)))
+                win.blit(chartext[cnt], chartext[cnt].get_rect(center=(scwidth / 2, scheight / 3 + size)))
 
         screen.fill((0, 0, 0))
         screen.blit(win, (0, 0))
